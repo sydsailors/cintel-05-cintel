@@ -2,7 +2,7 @@ shiny
 faicons
 shinylive
 pandas
-pyarrow
 plotly
 scipy
 shinywidgets
+plotly.express

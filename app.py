@@ -2,131 +2,177 @@
 # Imports at the top - PyShiny EXPRESS VERSION
 # --------------------------------------------
 
-# From shiny, import just reactive and render
+# From shiny, import just reactive and render 
 from shiny import reactive, render
 
-# From shiny.express, import just ui
-from shiny.express import ui
+# From shiny.express, import just ui and inputs if needed
+from shiny.express import ui, input
 
-# Imports from Python Standard Library to simulate live data
+# Add more imports as needed
 import random
 from datetime import datetime
-
-# --------------------------------------------
-# Optional: Import font awesome icons as you like
-# --------------------------------------------
-
+from collections import deque
+import pandas as pd
+import plotly.express as px
+from shinywidgets import render_plotly
+from scipy import stats
 from faicons import icon_svg
 
 # --------------------------------------------
-# FOR OPTIONAL LOCAL DEVELOPMENT
+# Set a constant UPDATE INTERVAL for all live data
+# Initialize a REACTIVE VALUE with a common data structure
+# This reactive value is used to store state (information)
+# This reactive value is a wrapper around a DEQUE of readings
 # --------------------------------------------
 
-# Add all packages not in the Std Library
-# to requirements.txt ONLY when working locally:
-#
-# faicons
-# shiny
-# shinylive
-# 
-# And install them into an active project virtual environment (usually in .venv)
-# --------------------------------------------
-# --------------------------------------------
-# SET UP THE REACTIVE CONTENT
-# --------------------------------------------
+UPDATE_INTERVAL_SECS: int = 5
+DEQUE_SIZE: int = 7
+reactive_value_wrapper = reactive.value(deque(maxlen=DEQUE_SIZE))
 
 # --------------------------------------------
-# PLANNING: We want to get a fake temperature and 
-# Time stamp every N seconds. 
-# For now, we'll avoid storage and just 
-# Try to get the fake live data working and sketch our app. 
-# We can do all that with one reactive calc.
-# Use constants for update interval so it's easy to modify.
-# ---------------------------------------------------------
-
-# --------------------------------------------
-# First, set a constant UPDATE INTERVAL for all live data
-# Constants are usually defined in uppercase letters
-# Use a type hint to make it clear that it's an integer (: int)
-# --------------------------------------------
-UPDATE_INTERVAL_SECS: int = 3
-# --------------------------------------------
-
-# Initialize a REACTIVE CALC that our display components can call
-# to get the latest data and display it.
-# The calculation is invalidated every UPDATE_INTERVAL_SECS
+# Initialize a REACTIVE CALC that all display components can call 
+# to get the latest data and display it. 
+# The calculation is invalidated every UPDATE_INTERVAL_SECS 
 # to trigger updates.
-
-# It returns everything needed to display the data.
-# Very easy to expand or modify.
-# (I originally looked at REACTIVE POLL, but this seems to work better.)
+# It returns to a tuple with everything needed to display the data.
+# Very easy to expand or modify. 
 # --------------------------------------------
 
 @reactive.calc()
 def reactive_calc_combined():
-
-    # Invalidate this calculation every UPDATE_INTERVAL_SECS to trigger updates
     reactive.invalidate_later(UPDATE_INTERVAL_SECS)
-
-    # Data generation logic. Get random between -17 and -19 C, rounded to 1 decimal place
-    temperature = round(random.uniform(-17, -19), 1)
-
-    # Get a timestamp for "now" and use string format strftime() method to format it
+    # Data generation logic
+    temperature = round(random.uniform(-18, -16), 1)
     time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    new_dictionary_entry = {"temp": temperature, "timestamp": time}
+    
+    # Get the deque and append the new entry
+    reactive_value_wrapper.get().append(new_dictionary_entry)
 
-    latest_dictionary_entry = {"temp": temperature, "timestamp": time}
+    # Get a snapshot of the current deque for any further processing
+    deque_snapshot = reactive_value_wrapper.get()
 
-    # Return everything we need
-    return latest_dictionary_entry
+    # For Display: convert deque to DataFrame for display
+    df = pd.DataFrame(deque_snapshot)
 
-# ------------------------------------------------
-# Define the Shiny UI Page layout - Page Options
-# ------------------------------------------------
+    # For Display: get the latest dictionary entry
+    latest_dictionary_entry = new_dictionary_entry 
 
+    # Return a tuple with everything we need 
+    return deque_snapshot, df, latest_dictionary_entry
+
+# --------------------------------------------
+# Define the Shiny UI Page layout
 # Call the ui.page_opts() function
-# Set title to a string in quotes that will appear at the top
-# Set fillable to True to use the whole page width for the UI
+# --------------------------------------------
 
-ui.page_opts(title="PyShiny Express: Live Data (Basic)", fillable=True)
-
-# ------------------------------------------------
-# Define the Shiny UI Page layout - Sidebar
-# ------------------------------------------------
+ui.page_opts(title="PyShiny Express: Live Data Example", fillable=True)
 
 # Sidebar is typically used for user interaction/information
-# Note the with statement to create the sidebar followed by a colon
-# Everything in the sidebar is indented consistently
-
 with ui.sidebar(open="open"):
     ui.h2("Antarctic Explorer", class_="text-center")
-    ui.p(
-        "A demonstration of real-time temperature readings in Antarctica.",
-        class_="text-center",
-    )
+    ui.p("A demonstration of real-time temperature readings in Antarctica.", class_="text-center")
+    ui.hr()
+    ui.h6("Links:")
+    ui.a("GitHub Source", href="https://github.com/denisecase/cintel-05-cintel", target="_blank")
+    ui.a("GitHub App", href="https://denisecase.github.io/cintel-05-cintel/", target="_blank")
+    ui.a("PyShiny", href="https://shiny.posit.co/py/", target="_blank")
+    ui.a("PyShiny Express", href="https://shiny.posit.co/blog/posts/shiny-express/", target="_blank")
 
-#---------------------------------------------------------------------
-# In Shiny Express, everything not in the sidebar is in the main panel
-#---------------------------------------------------------------------
+    # Add a unit toggle switch to display either Fehrenheit or Celsius
+    ui.input_switch("use_fahrenheit", "Display in Fahrenheit", value=False)
 
+# --------------------------------------------
+# Main UI Panels
+# --------------------------------------------
 
-ui.h2("Current Temperature")
+with ui.layout_columns():
+    with ui.value_box(
+        showcase=icon_svg("sun"),
+        theme="bg-gradient-purple-blue",
+    ):
+        "Current Temperature"
 
-@render.text
-def display_temperature():
-    """Get the latest reading and return a temperature string"""
-    latest_dictionary_entry = reactive_calc_combined()
-    return f"{latest_dictionary_entry['temp']} C"
+        @render.text
+        def display_temp():
+            # Get the latest reading and return a temperature string
+            deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
+            temp_c = latest_dictionary_entry["temp"]
+            if input.use_fahrenheit():
+                temp_f = round(temp_c * 9 / 5 + 32, 1)
+                return f"{temp_f} °F"
+            else:
+                return f"{temp_c} °C"
+        "Live temperature reading"
 
-ui.p("warmer than usual")
+    with ui.card(full_screen=True):
+        ui.card_header("Current Date and Time")
 
-ui.div(icon_svg("sun"))
+        @render.text
+        def display_time():
+            deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
+            return f"{latest_dictionary_entry['timestamp']}"
 
-ui.hr()
+with ui.card(full_screen=True):
+    ui.card_header("Most Recent Readings")
 
-ui.h2("Current Date and Time")
+    @render.data_frame
+    def display_df():
+        _, df, _ = reactive_calc_combined()
+        
+        # Create funtion to change display to show temperatures in Fahrenheit or Celsius
+        if input.use_fahrenheit():
+            df["Temperature (°F)"] = df["temp"] * 9 / 5 + 32
+            df_display = df[["Temperature (°F)", "timestamp"]].rename(columns={"timestamp": "Timestamp"})
+        else:
+            df_display = df.rename(columns={"temp": "Temperature (°C)", "timestamp": "Timestamp"})
 
-@render.text
-def display_time():
-    """Get the latest reading and return a timestamp string"""
-    latest_dictionary_entry = reactive_calc_combined()
-    return f"{latest_dictionary_entry['timestamp']}"
+        # Use maximum width
+        return render.DataGrid(df_display, width="100%")
+
+with ui.card():
+    ui.card_header("Chart with Current Trend")
+
+    @render_plotly
+    def display_plot():
+
+        # Fetch from the reactive calc function 
+        deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
+        
+        # Ensure the DataFrame is not empty before plotting
+        if not df.empty:
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
+            if input.use_fahrenheit():
+                df["temp_display"] = df["temp"] * 9 / 5 + 32
+                y_label = "Temperature (°F)"
+            else:
+                df["temp_display"] = df["temp"]
+                y_label = "Temperature (°C)"
+
+            # Create scatter plot for readings 
+            # Pass in the df, the name of the x column, the name of the y column, and more
+            fig = px.scatter(
+                df,
+                x="timestamp",
+                y="temp_display",
+                title="Temperature Readings with Regression Line",
+                labels={"temp_display": y_label, "timestamp": "Time"},
+                color_discrete_sequence=["blue"]
+            )
+
+            # Linear regression line
+            x_vals = list(range(len(df)))
+            y_vals = df["temp_display"]
+            slope, intercept, _, _, _ = stats.linregress(x_vals, y_vals)
+            df["best_fit_line"] = [slope * x + intercept for x in x_vals]
+
+            fig.add_scatter(
+                x=df["timestamp"],
+                y=df["best_fit_line"],
+                mode="lines",
+                name="Regression Line"
+            )
+
+            fig.update_layout(xaxis_title="Time", yaxis_title=y_label)
+            
+            return fig
