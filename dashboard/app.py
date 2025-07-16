@@ -74,8 +74,8 @@ with ui.sidebar(open="open"):
     ui.p("A demonstration of real-time temperature readings in Antarctica.", class_="text-center")
     ui.hr()
     ui.h6("Links:")
-    ui.a("GitHub Source", href="https://github.com/denisecase/cintel-05-cintel", target="_blank")
-    ui.a("GitHub App", href="https://denisecase.github.io/cintel-05-cintel/", target="_blank")
+    ui.a("GitHub Source", href="https://github.com/sydsailors/cintel-05-cintel", target="_blank")
+    ui.a("GitHub App", href="https://sydsailors.github.io/cintel-05-cintel/", target="_blank")
     ui.a("PyShiny", href="https://shiny.posit.co/py/", target="_blank")
     ui.a("PyShiny Express", href="https://shiny.posit.co/blog/posts/shiny-express/", target="_blank")
 
